@@ -1,0 +1,175 @@
+# general settings
+name: 540_3_1_ASVSR_Vimeo90K_asBI_1200k
+model_type: ASVSRModel
+# scale: !!python/tuple [4, 4]
+num_gpu: 2  # set num_gpu: 0 for cpu mode
+manual_seed: 101
+
+# dataset and data loader settings
+datasets:
+  train:
+    name: Vimeo90K
+    type: ASVimeo90KDataset
+    dataroot_gt: datasets/vimeo90k/vimeo_septuplet/sequences
+    dataroot_lq: datasets/vimeo90k/vimeo_septuplet_matlabLRx4/sequences
+    meta_info_file: lbasicsr/data/meta_info/meta_info_Vimeo90K_train_GT.txt
+    io_backend:
+      type: disk
+
+    num_frame: 7
+    # arbitrary scale dataset --------------------------
+    lq_size: 60
+    downsample_mode: torch              # [torch, core, numpy]
+    init_int_scale: true                # scale x2, x3, x4 for 1 epoch
+    single_scale_ft: false              # only a scale
+    CL_train_set: [120, 3, 5]           # Continuous learning training strategy
+    # --------------------------------------------------
+    gt_size: 128                        # not needed
+    interval_list: [1]
+    random_reverse: false
+    use_hflip: true
+    use_rot: true
+    flip_sequence: false
+
+    # data loader
+    num_worker_per_gpu: 6
+    batch_size_per_gpu: 8
+    dataset_enlarge_ratio: 1
+#    prefetch_mode: ~
+    # cuda
+    prefetch_mode: cuda
+    pin_memory: true
+
+  val_x4:
+    name: Vid4_x4
+    type: ASVideoTestDataset
+    dataroot_gt: datasets/Vid4/GT
+    dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4     # not needed
+    io_backend:
+      type: disk
+
+    cache_data: false
+    num_frame: 7
+    padding: reflection    # [reflection, reflection_circle]
+    # arbitrary scale dataset --------------------------
+    use_arbitrary_scale_downsampling: true
+    downsampling_scale: !!python/tuple [4, 4]
+    downsampling_mode: torch
+    # --------------------------------------------------
+  
+  val_x3:
+    name: Vid4_x3
+    type: ASVideoTestDataset
+    dataroot_gt: datasets/Vid4/GT
+    dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4     # not needed
+    io_backend:
+      type: disk
+
+    cache_data: false
+    num_frame: 7
+    padding: reflection    # [reflection, reflection_circle]
+    # arbitrary scale dataset --------------------------
+    use_arbitrary_scale_downsampling: true
+    downsampling_scale: !!python/tuple [3, 3]
+    downsampling_mode: torch
+    # --------------------------------------------------
+  
+  val_x2:
+    name: Vid4_x2
+    type: ASVideoTestDataset
+    dataroot_gt: datasets/Vid4/GT
+    dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4     # not needed
+    io_backend:
+      type: disk
+
+    cache_data: false
+    num_frame: 7
+    padding: reflection    # [reflection, reflection_circle]
+    # arbitrary scale dataset --------------------------
+    use_arbitrary_scale_downsampling: true
+    downsampling_scale: !!python/tuple [2, 2]
+    downsampling_mode: torch
+    # --------------------------------------------------
+
+# network structures
+network_g:
+  type: ASVSR
+  num_in_ch: 3
+  num_feat: 64
+  num_frame: 7
+  slid_win: 3
+  fusion_win: 5
+  interval: 0
+  w1_num_block: 4
+  w2_num_block: 2
+  n_resgroups: 4
+  n_resblocks: 8
+  center_frame_idx: ~
+
+# path
+path:
+  pretrain_network_g: ~
+  strict_load_g: true
+  resume_state: ~
+
+# training settings
+train:
+  ema_decay: 0.999
+  optim_g:
+    type: Adam
+    lr: !!float 2e-4
+    weight_decay: 0
+    betas: [ 0.9, 0.999 ]
+
+  scheduler:
+    # CosineAnnealingRestartLR -------------------------------
+    type: CosineAnnealingRestartLR
+    periods: [ 300000, 300000, 300000, 300000 ]
+    restart_weights: [ 1, 0.5, 0.5, 0.5 ]
+    eta_min: !!float 1e-7
+    # fine-tune ---------------------------------------------
+    # type: MultiStepLR
+    # milestones: [50000, 100000]
+    # gamma: 0.1
+#    restarts: [150000, 150000, 150000, 150000]
+#    restart_weights: [ 1, 0.1, 0.1, 0.1 ]
+
+  total_iter: 1200000    #600000
+  warmup_iter: -1  # -1 no warm up
+
+  # losses
+  pixel_opt:
+    type: CharbonnierLoss
+    loss_weight: 1.0
+    reduction: mean
+
+# validation settings
+val:
+  val_freq: !!float 5e3
+  save_img: false
+
+  metrics:
+    psnr_y: # metric name, can be arbitrary
+      type: calculate_psnr
+      crop_border: 0
+      test_y_channel: true
+    ssim_y:
+      type: calculate_ssim
+      crop_border: 0
+      test_y_channel: true
+
+# logging settings
+logger:
+  print_freq: 100        # default: 100
+  save_checkpoint_freq: !!float 5e3
+  use_tb_logger: true
+  wandb:
+    project: ~
+    resume_id: ~
+
+# dist training settings
+dist_params:
+  backend: nccl
+  port: 29500
+
+find_unused_parameters: true
