@@ -13,16 +13,12 @@ from lbasicsr.metrics import calculate_metric
 from lbasicsr.models.base_model import BaseModel
 from lbasicsr.utils import get_root_logger, tensor2img, imwrite
 from lbasicsr.utils.registry import MODEL_REGISTRY
-from .sam import SAM
 
 
-@MODEL_REGISTRY.register()  # 注册SRModel
+@MODEL_REGISTRY.register()
 class SRModel(BaseModel):
     """Base SR model for single image super-resolution."""
 
-    # ========================================
-    # 初始化 SRModel类，如定义网络和 load weight
-    # ========================================
     def __init__(self, opt):
         super(SRModel, self).__init__(opt)
 
@@ -37,13 +33,9 @@ class SRModel(BaseModel):
             param_key = self.opt['path'].get('param_key_g', 'params')
             self.load_network(self.net_g, load_path, self.opt['path'].get('strict_load_g', True), param_key)
 
-        # 初始化训练相关的设置
         if self.is_train:
             self.init_training_settings()
 
-    # =========================================================
-    # 初始化与训练相关的配置，如 loss，设置 optimizers 和 schedulers
-    # =========================================================
     def init_training_settings(self):
         self.net_g.train()
         train_opt = self.opt['train']
@@ -66,10 +58,7 @@ class SRModel(BaseModel):
 
         # define losses
         if train_opt.get('pixel_opt'):
-            # =================================================================
-            # 根据配置文件yml中的loss类型和参数，实例化loss
             self.cri_pix = build_loss(train_opt['pixel_opt']).to(self.device)
-            # =================================================================
         else:
             self.cri_pix = None
 
@@ -85,9 +74,6 @@ class SRModel(BaseModel):
         self.setup_optimizers()
         self.setup_schedulers()
 
-    # =============================================================
-    # 具体设置 optimizer，可根据实际需求，对params设置多组不同的optimizer
-    # =============================================================
     def setup_optimizers(self):
         train_opt = self.opt['train']
         optim_params = []
@@ -102,9 +88,6 @@ class SRModel(BaseModel):
         self.optimizer_g = self.get_optimizer(optim_type, optim_params, **train_opt['optim_g'])
         self.optimizers.append(self.optimizer_g)
 
-    # =========================================
-    # 提供数据，是与dataloder（dataset）的接口
-    # =========================================
     def feed_data(self, data):
         self.lq = data['lq'].to(self.device)
         # print('self.lq shape:', self.lq.shape)
@@ -115,15 +98,10 @@ class SRModel(BaseModel):
             self.scale = data['scale']
             # self.scale = (data['scale'][0].to(self.device), data['scale'][1].to(self.device))
 
-    # =======================================================================
-    # 优化参数，即一个完整的 train step，包括forward，loss计算，backward，参数优化等
-    # =======================================================================
     def optimize_parameters(self, current_iter):
-        self.optimizer_g.zero_grad()    # 使得 optimizer 中的梯度归零
+        self.optimizer_g.zero_grad()
         self.output = self.net_g(self.lq)   # network forward
 
-        # ===========================================================================
-        # loss 的计算
         l_total = 0
         loss_dict = OrderedDict()
         # pixel loss
@@ -140,20 +118,15 @@ class SRModel(BaseModel):
             if l_style is not None:
                 l_total += l_style
                 loss_dict['l_style'] = l_style
-        # ===========================================================================
 
         l_total.backward()
-        self.optimizer_g.step()     # 优化器更新
+        self.optimizer_g.step()
 
-        # 为了 loss 的显示，同时也同步多卡上的loss
         self.log_dict = self.reduce_loss_dict(loss_dict)
 
         if self.ema_decay > 0:
             self.model_ema(decay=self.ema_decay)
 
-    # ====================================
-    # 测试流程
-    # ====================================
     def test(self):
         if hasattr(self, 'net_g_ema'):
             self.net_g_ema.eval()
@@ -213,16 +186,10 @@ class SRModel(BaseModel):
 
         self.output = output.mean(dim=0, keepdim=True)
 
-    # ==================================
-    # validation 的流程（多卡 dist）
-    # ==================================
     def dist_validation(self, dataloader, current_iter, tb_logger, save_img):
         if self.opt['rank'] == 0:
             self.nondist_validation(dataloader, current_iter, tb_logger, save_img)
 
-    # ==================================
-    # validation 的流程（单卡 non-dist）
-    # ==================================
     def nondist_validation(self, dataloader, current_iter, tb_logger, save_img):
         dataset_name = dataloader.dataset.opt['name']
         with_metrics = self.opt['val'].get('metrics') is not None
@@ -240,19 +207,16 @@ class SRModel(BaseModel):
         metric_data = dict()
         if use_pbar:
             pbar = tqdm(total=len(dataloader), unit='image')
-
-        # =========================================================================
+        
         for idx, val_data in enumerate(dataloader):
             if val_data.get('lq_path', None):
                 img_name = osp.splitext(osp.basename(val_data['lq_path'][0]))[0]
             else:
                 img_name = osp.splitext(osp.basename(val_data['gt_path'][0]))[0]
-            # 喂测试数据
+            
             self.feed_data(val_data)
-            # 测试
             self.test()
-
-            # 得到测试结果
+            
             visuals = self.get_current_visuals()
             sr_img = tensor2img([visuals['result']])
             metric_data['img'] = sr_img
@@ -282,17 +246,13 @@ class SRModel(BaseModel):
             if with_metrics:
                 # calculate metrics
                 for name, opt_ in self.opt['val']['metrics'].items():
-                    # 根据配置文件yml中metrics的配置，调用相应的函数
                     self.metric_results[name] += calculate_metric(metric_data, opt_)
             if use_pbar:
                 pbar.update(1)
                 pbar.set_description(f'Test {img_name}')
         if use_pbar:
             pbar.close()
-        # =========================================================================
 
-        # ========================================================================================================
-        # 显示 metrics 的结果
         if with_metrics:
             for metric in self.metric_results.keys():
                 self.metric_results[metric] /= (idx + 1)
@@ -300,11 +260,7 @@ class SRModel(BaseModel):
                 self._update_best_metric_result(dataset_name, metric, self.metric_results[metric], current_iter)
 
             self._log_validation_metric_values(current_iter, dataset_name, tb_logger)
-        # ========================================================================================================
-
-    # =============================================
-    # 控制如何打印 validation 的结果
-    # =============================================
+    
     def _log_validation_metric_values(self, current_iter, dataset_name, tb_logger):
         log_str = f'Validation {dataset_name}\n'
         for metric, value in self.metric_results.items():
@@ -319,10 +275,7 @@ class SRModel(BaseModel):
         if tb_logger:
             for metric, value in self.metric_results.items():
                 tb_logger.add_scalar(f'metrics/{dataset_name}/{metric}', value, current_iter)
-
-    # ==================================================================
-    # 得到网络的输出结果。该函数会在 validation 中用到（实际可以简化掉）
-    # ==================================================================
+    
     def get_current_visuals(self):
         logger = get_root_logger()
         # only h, w
@@ -330,9 +283,9 @@ class SRModel(BaseModel):
         # logger.info("lq: ({}, {})".format(self.lq.size(-2), self.lq.size(-1)))
         # logger.info("output: ({}, {})".format(self.output.size(-2), self.output.size(-1)))
         # all shape
-        logger.info("gt: ".format(self.gt.shape))
-        logger.info("lq: ".format(self.lq.shape))
-        logger.info("output: ".format(self.output.shape))
+        logger.info("gt: {}".format(self.gt.shape))
+        logger.info("lq: {}".format(self.lq.shape))
+        logger.info("output: {}".format(self.output.shape))
 
         # arbitrary-scale BI post-processing
         if self.output.ndim == 4 and self.output.shape != self.gt.shape:
@@ -383,80 +336,9 @@ class SRModel(BaseModel):
             out_dict['gt'] = self.gt.detach().cpu()
         return out_dict
 
-    # =========================================================
-    # 保存网络（.pth 文件）以及训练状态（.state 文件）
-    # =========================================================
     def save(self, epoch, current_iter):
         if hasattr(self, 'net_g_ema'):
             self.save_network([self.net_g, self.net_g_ema], 'net_g', current_iter, param_key=['params', 'params_ema'])
         else:
             self.save_network(self.net_g, 'net_g', current_iter)
         self.save_training_state(epoch, current_iter)
-
-
-@MODEL_REGISTRY.register()  # 注册SRModel
-class SRModel_SAM(SRModel):
-    """Base SR model for single image super-resolution."""
-
-    def __init__(self, opt):
-        super(SRModel_SAM, self).__init__(opt)
-        
-    def setup_optimizers(self):
-        train_opt = self.opt['train']
-        optim_params = []
-        for k, v in self.net_g.named_parameters():
-            if v.requires_grad:
-                optim_params.append(v)
-            else:
-                logger = get_root_logger()
-                logger.warning(f'Params {k} will not be optimized.')
-
-        optim_type = train_opt['optim_g'].pop('type')
-        # self.optimizer_g = self.get_optimizer(optim_type, optim_params, **train_opt['optim_g'])
-        # SGD
-        # base_optimizer = torch.optim.SGD
-        # self.optimizer_g = SAM(optim_params, base_optimizer, lr=train_opt['optim_g']['lr'], momentum=train_opt['optim_g']['momentum'])
-        # Adam
-        base_optimizer = torch.optim.Adam
-        self.optimizer_g = SAM(optim_params, base_optimizer, rho=0.05, adaptive=False, **train_opt['optim_g'])
-        self.optimizers.append(self.optimizer_g)
-    
-    def optimize_parameters(self, current_iter):
-        self.optimizer_g.zero_grad()    # 使得 optimizer 中的梯度归零
-        self.output = self.net_g(self.lq)   # network forward
-
-        # ===========================================================================
-        # loss 的计算
-        l_total = 0
-        loss_dict = OrderedDict()
-        # pixel loss
-        if self.cri_pix:
-            l_pix = self.cri_pix(self.output, self.gt)
-            l_total += l_pix
-            loss_dict['l_pix'] = l_pix
-        # perceptual loss
-        if self.cri_perceptual:
-            l_percep, l_style = self.cri_perceptual(self.output, self.gt)
-            if l_percep is not None:
-                l_total += l_percep
-                loss_dict['l_percep'] = l_percep
-            if l_style is not None:
-                l_total += l_style
-                loss_dict['l_style'] = l_style
-        # ===========================================================================
-
-        # ------ for SAM ---------------------------------------------- 
-        l_total.backward()
-        self.optimizer_g.first_step(zero_grad=True)
-        
-        # l_total.backward()
-        l_total1 = l_total.detach_().requires_grad_(True)
-        l_total1.backward()
-        self.optimizer_g.second_step(zero_grad=True)
-        # -------------------------------------------------------------
-
-        # 为了 loss 的显示，同时也同步多卡上的loss
-        self.log_dict = self.reduce_loss_dict(loss_dict)
-
-        if self.ema_decay > 0:
-            self.model_ema(decay=self.ema_decay)

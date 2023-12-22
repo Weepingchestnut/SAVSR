@@ -4,12 +4,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torchvision.transforms as T
-from torchvision.transforms import InterpolationMode
-from torch.nn.modules.utils import _triple
-import tqdm
 
-from lbasicsr.archs.arch_util import Upsample, make_layer
+from lbasicsr.archs.arch_util import make_layer
+from lbasicsr.metrics.runtime import VSR_runtime_test
 from lbasicsr.utils.registry import ARCH_REGISTRY
 
 
@@ -125,11 +122,8 @@ class OSConv2d(nn.Module):
         # add scale routing weights -----------------------------
         self.scale_routing = nn.Sequential(
             nn.Linear(in_planes+2, in_planes*2),
-            # nn.GELU(),
             nn.ReLU(True),
             nn.Linear(in_planes*2, in_planes),
-            # nn.GELU(),
-            # nn.Softmax(1)
             nn.ReLU(True)
         )
         self.avgpool = nn.AdaptiveAvgPool2d(1)
@@ -214,16 +208,6 @@ class OSAdapt(nn.Module):
         self.adapt = OSConv2d(channels, channels, kernel_size=3, stride=1, padding=1)
     
     def forward(self, x, scale):
-        # # padding
-        # h, w = x.size(-2), x.size(-1)
-        # if w % 2 != 0:
-        #     pad_w = int(w//2 + 1) * 2 - w
-        #     x = F.pad(x, (0, pad_w), mode='constant', value=0)
-        # if h % 2 != 0:
-        #     pad_h = int(h//2 + 1) * 2 - h
-        #     x = F.pad(x, (0, 0, 0, pad_h), mode='constant', value=0)
-        # mask = self.mask(x)[..., 0:h, 0:w]
-        
         mask = self.mask(x)
         adapted = self.adapt(x, scale)
         
@@ -392,6 +376,45 @@ class STAUpsample(nn.Module):
         return out
 
 
+# class ResidualBlock(nn.Module):
+
+#     def __init__(self, num_feat=64, num_frame=3, act=nn.LeakyReLU(0.2, True), use_osconv=False):
+#         super(ResidualBlock, self).__init__()
+#         self.nfe = num_feat
+#         self.nfr = num_frame
+#         self.act = act
+#         self.use_osconv = use_osconv
+
+#         self.conv0 = nn.Sequential(*[nn.Conv2d(num_feat, num_feat, kernel_size=3, stride=1, padding=1)
+#                                      for _ in range(num_frame)])
+        
+#         if use_osconv:
+#             self.osconv = OSConv2d(num_feat * num_frame, num_feat, kernel_size=3, stride=1, padding=1)
+#         else:
+#             # 1x1 conv to reduce dim
+#             self.conv1 = nn.Conv2d(num_feat * num_frame, num_feat, kernel_size=1, stride=1)
+#         self.conv2 = nn.Sequential(*[nn.Conv2d(num_feat * 2, num_feat, kernel_size=3, stride=1, padding=1)
+#                                      for _ in range(num_frame)])
+
+#     def forward(self, input: List):     # input [feat, scale]
+#         x, scale = input[0], input[1]
+
+#         x1 = [self.act(self.conv0[i](x[i])) for i in range(self.nfr)]
+
+#         merge = torch.cat(x1, dim=1)
+#         # base = self.act(self.conv1(merge))
+
+#         if self.use_osconv:
+#             base = self.act(self.osconv(merge, scale))
+#         else:
+#             base = self.act(self.conv1(merge))
+
+#         x2 = [torch.cat([base, i], 1) for i in x1]
+#         x2 = [self.act(self.conv2[i](x2[i])) for i in range(self.nfr)]
+
+#         return [[torch.add(x[i], x2[i]) for i in range(self.nfr)], scale]
+
+
 class ResidualBlock(nn.Module):
     """
     先仿照 OVSR 中的 PFRB 构建多帧隐特征的残差融合块
@@ -406,12 +429,10 @@ class ResidualBlock(nn.Module):
 
         self.conv0 = nn.Sequential(*[nn.Conv2d(num_feat, num_feat, kernel_size=3, stride=1, padding=1)
                                      for _ in range(num_frame)])
-        
+        # 1x1 conv to reduce dim
+        self.conv1 = nn.Conv2d(num_feat * num_frame, num_feat, kernel_size=1, stride=1)
         if use_osconv:
-            self.osconv = OSConv2d(num_feat * num_frame, num_feat, kernel_size=3, stride=1, padding=1)
-        else:
-            # 1x1 conv to reduce dim
-            self.conv1 = nn.Conv2d(num_feat * num_frame, num_feat, kernel_size=1, stride=1)
+            self.osconv = OSConv2d(num_feat, num_feat, kernel_size=3, stride=1, padding=1)
         self.conv2 = nn.Sequential(*[nn.Conv2d(num_feat * 2, num_feat, kernel_size=3, stride=1, padding=1)
                                      for _ in range(num_frame)])
 
@@ -421,12 +442,13 @@ class ResidualBlock(nn.Module):
         x1 = [self.act(self.conv0[i](x[i])) for i in range(self.nfr)]
 
         merge = torch.cat(x1, dim=1)
-        # base = self.act(self.conv1(merge))
+        base = self.act(self.conv1(merge))
 
         if self.use_osconv:
-            base = self.act(self.osconv(merge, scale))
-        else:
-            base = self.act(self.conv1(merge))
+            # 518: add residual ------------
+            res = self.act(self.osconv(base, scale))
+            base = res + base
+            # ------------------------------
 
         x2 = [torch.cat([base, i], 1) for i in x1]
         x2 = [self.act(self.conv2[i](x2[i])) for i in range(self.nfr)]
@@ -590,9 +612,9 @@ class ResidualGroup(nn.Module):
         return res + x
 
 
-# 540_3_1 asvsr add STAU
-# @ARCH_REGISTRY.register()
-class ASVSR(nn.Module):
+# 540_3_0 asvsr add STAU
+@ARCH_REGISTRY.register()
+class SAVSR(nn.Module):
     def __init__(self,
                  num_in_ch: int = 3,
                  num_feat: int = 64,
@@ -607,7 +629,7 @@ class ASVSR(nn.Module):
                  downsample_scale: int = 2,
                  center_frame_idx=None,
                  ):
-        super(ASVSR, self).__init__()
+        super(SAVSR, self).__init__()
         self.scale = (4, 4)
         if center_frame_idx is None:
             self.center_frame_idx = num_frame // 2
@@ -686,19 +708,36 @@ class ASVSR(nn.Module):
         it = x[:, index, ...]
 
         return it
+    
+    def pad_spatial(self, x, multiple: int = 2):
+        """Apply padding spatially.
+
+        Since the OSAdapt module requires that the resolution is a multiple of 2, 
+        we apply padding to the input LR images if their resolution is not divisible by 2.
+
+        Args:
+            x (Tensor): Input LR sequence with shape (n, t, c, h, w).
+        Returns:
+            Tensor: Padded LR sequence with shape (n, t, c, h_pad, w_pad).
+        """
+        n, t, c, h, w = x.size()
+
+        pad_h = (multiple - h % multiple) % multiple
+        pad_w = (multiple - w % multiple) % multiple
+
+        # padding
+        x = x.view(-1, c, h, w)
+        x = F.pad(x, [0, pad_w, 0, pad_h], mode='reflect')
+
+        return x.view(n, t, c, h + pad_h, w + pad_w)
 
     def forward(self, x):
-        b, t, c, h, w = x.size()
-        H, W = get_HW(h, w, self.scale)
+        b, t, c, h_input, w_input = x.size()
+        H, W = get_HW(h_input, w_input, self.scale)
+        
         x_center = x[:, self.center_frame_idx, :, :, :].contiguous()
 
-        # lower right padding
-        if w % self.downsample_scale != 0:
-                pad_w = int(w // self.downsample_scale + 1) * self.downsample_scale - w
-                x = F.pad(x, (0, pad_w), mode='constant', value=0)     # [constant, replicate]
-        if h % self.downsample_scale != 0:
-            pad_h = int(h // self.downsample_scale + 1) * self.downsample_scale - h
-            x = F.pad(x, (0, 0, 0, pad_h), mode='constant', value=0)   # constant
+        x = self.pad_spatial(x)
 
         x_forward, x_backward = self.frame_sample(x, t, interval=self.interval)
 
@@ -709,13 +748,13 @@ class ASVSR(nn.Module):
         ht_p2f = torch.zeros((b, self.num_feat, x.shape[-2], x.shape[-1]), dtype=torch.float, device=x.device)
         
         for idx in range(self.iter_win - self.slid_win + 1):  # [0, 1, 2, 3, 4, 5, 6]
-            # backward (future --> past): [0, 1, (2, 3, 4, 5, 6)] --> [0, (1, 2, 3, 4, 5), 6] --> [(0, 1, 2, 3, 4), 5, 6]
+            # backward (future --> past): [0, 1, 2, 3, (4, 5, 6)] --> [0, 1, 2, (3, 4, 5), 6] --> [0, 1, (2, 3, 4), 5, 6] --> ......
             cur_t = self.iter_win - 1 - self.slid_win // 2 - idx
             it = self.generate_it(x_backward, cur_t, self.slid_win)
             ht_f2p = self.f2p_win(it, ht_f2p, self.scale)
             h_f2p_list.insert(0, ht_f2p)
             
-            # forward (past --> future): [(0, 1, 2, 3, 4), 5, 6] --> [0, (1, 2, 3, 4, 5), 6] --> [0, 1, (2, 3, 4, 5, 6)]
+            # forward (past --> future): [(0, 1, 2), 3, 4, 5, 6] --> [0, (1, 2, 3), 4, 5, 6] --> [0, 1, (2, 3, 4), 5, 6] --> ......
             cur_t = idx + self.slid_win // 2
             it = self.generate_it(x_forward, cur_t, self.slid_win)
             ht_p2f = self.p2f_win(it, ht_p2f, self.scale)
@@ -737,7 +776,7 @@ class ASVSR(nn.Module):
         h_feat += share_source
 
         # ------ 3. Arbitrary-Scale Upsampling -------------------------------------------------
-        sr = self.upsample(h_feat[..., :h, :w], self.scale, align_feat[..., :h, :w])
+        sr = self.upsample(h_feat[..., :h_input, :w_input], self.scale, align_feat[..., :h_input, :w_input])
         sr = self.tail(sr)  # 3x3Conv+bias
         sr = sr + F.interpolate(x_center, size=(H, W), mode='bilinear', align_corners=False)
         # --------------------------------------------------------------------------------------
@@ -751,16 +790,14 @@ def get_HW_round(h, w, scale: tuple):
 def get_HW_int(h, w, scale: tuple):
     return int(h * scale[0]), int(w * scale[1])
 
-get_HW = get_HW_round
+# get_HW = get_HW_round
 # ------ for fvcore ------
 get_HW = get_HW_int
 
 
 if __name__ == '__main__':
+    from torch.profiler import profile, record_function, ProfilerActivity
     from fvcore.nn import flop_count_table, FlopCountAnalysis, ActivationCountAnalysis
-    from torch.backends import cudnn
-    
-    cudnn.benchmark = True
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     # device = 'cpu'
@@ -781,8 +818,8 @@ if __name__ == '__main__':
     # ----------------------------------------
     # problem scale and shape: x1.2, 480x585
     # ----------------------------------------
-    scale = (3.5, 3.5)
-    model = ASVSR(
+    scale = (4, 4)
+    model = SAVSR(
         num_frame=num_frame, 
         slid_win=slid_win, 
         fusion_win=fusion_win,
@@ -793,31 +830,23 @@ if __name__ == '__main__':
     model.set_scale(scale)
     model.eval()    # needed, maybe bn bug
     
-    input = torch.rand(1, num_frame, 3, 100, 100).to(device)
+    input = torch.rand(1, num_frame, 3, 180, 320).to(device)
     
-    print('warm up ...\n')
-    with torch.no_grad():
-        for _ in range(100):
-            _ = model(input)
-        
-    # synchronize 等待所有 GPU 任务处理完才返回 CPU 主线程
-    torch.cuda.synchronize()
+    # ------ torch profile -------------------------
+    with profile(
+        activities=[
+            ProfilerActivity.CPU,
+            ProfilerActivity.CUDA],
+        record_shapes=True,
+        profile_memory=True,
+    ) as prof:
+        with record_function("model_inference"):
+            out = model(input)
     
-    starter, ender = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
-    timings = np.zeros((repetitions, 1))
+    print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
     
-    print('testing ...\n')
-    with torch.no_grad():
-        for rep in tqdm.tqdm(range(repetitions)):
-            starter.record()
-            _ = model(input)
-            ender.record()
-            torch.cuda.synchronize() # 等待GPU任务完成
-            curr_time = starter.elapsed_time(ender) # 从 starter 到 ender 之间用时,单位为毫秒
-            timings[rep] = curr_time
-    
-    avg = timings.sum()/repetitions
-    print('\navg={}\n'.format(avg))
+    # ------ Runtime ------------------------------
+    VSR_runtime_test(model, input, scale)
 
     print(
         "Model have {:.3f}M parameters in total".format(sum(x.numel() for x in model.parameters()) / 1000000.0))
@@ -829,117 +858,137 @@ if __name__ == '__main__':
 
 
 """
-warm up ...
+STAGE:2023-12-21 21:59:44 792942:792942 ActivityProfilerController.cpp:312] Completed Stage: Warm Up
+STAGE:2023-12-21 21:59:59 792942:792942 ActivityProfilerController.cpp:318] Completed Stage: Collection
+STAGE:2023-12-21 21:59:59 792942:792942 ActivityProfilerController.cpp:322] Completed Stage: Post Processing
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                                                   Name    Self CPU %      Self CPU   CPU total %     CPU total  CPU time avg     Self CUDA   Self CUDA %    CUDA total  CUDA time avg       CPU Mem  Self CPU Mem      CUDA Mem  Self CUDA Mem    # of Calls  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+                                        model_inference         0.50%      71.937ms       100.00%       14.283s       14.283s       0.000us         0.00%     223.570ms     223.570ms       1.44 Kb     -14.08 Mb      20.94 Gb      -3.55 Gb             1  
+                                      aten::convolution         0.04%       6.088ms        90.64%       12.947s      18.184ms       0.000us         0.00%     127.800ms     179.494us           0 b           0 b       7.18 Gb           0 b           712  
+                                     aten::_convolution         0.05%       7.440ms        90.60%       12.941s      18.176ms       0.000us         0.00%     127.800ms     179.494us           0 b           0 b       7.18 Gb           0 b           712  
+                                           aten::conv2d         0.04%       5.643ms        90.66%       12.949s      18.187ms       0.000us         0.00%     124.232ms     174.483us           0 b           0 b       7.18 Gb     225.01 Mb           712  
+                                aten::cudnn_convolution        79.68%       11.381s        90.46%       12.922s      18.148ms      84.745ms        43.02%     106.426ms     149.475us           0 b           0 b       7.18 Gb       7.18 Gb           712  
+cudnn_infer_ampere_scudnn_winograd_128x128_ldg1_ldg4...         0.00%       0.000us         0.00%       0.000us       0.000us      69.762ms        35.41%      69.762ms     181.672us           0 b           0 b           0 b           0 b           384  
+                                              aten::cat         0.04%       5.923ms         1.98%     282.768ms       1.071ms      24.713ms        12.55%      25.362ms      96.068us           0 b           0 b       6.44 Gb       6.44 Gb           264  
+void at::native::elementwise_kernel<128, 2, at::nati...         0.00%       0.000us         0.00%       0.000us       0.000us      22.407ms        11.37%      22.407ms      51.510us           0 b           0 b           0 b           0 b           435  
+                                             aten::add_         0.05%       6.706ms         0.07%      10.231ms      15.961us      21.186ms        10.75%      21.441ms      33.449us           0 b           0 b           0 b           0 b           641  
+void at::native::(anonymous namespace)::CatArrayBatc...         0.00%       0.000us         0.00%       0.000us       0.000us      19.346ms         9.82%      19.346ms     101.821us           0 b           0 b           0 b           0 b           190  
+-------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
+Self CPU time total: 14.283s
+Self CUDA time total: 196.992ms
 
-testing ...
+Warm up ...
 
-100%|████████████████████████████████████████████████████████████████████████████████████████████████████████| 300/300 [00:28<00:00, 10.43it/s]
+Testing ...
 
-avg=95.3974016825358
+100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████| 300/300 [01:09<00:00,  4.30it/s]
 
-Model have 18.890M parameters in total
+Average Runtime: 232.156 ms
+
+Model have 11.477M parameters in total
 | module                           | #parameters or shape   | #flops     | #activations   |
 |:---------------------------------|:-----------------------|:-----------|:---------------|
-| model                            | 18.89M                 | 0.233T     | 0.44G          |
+| model                            | 11.477M                | 1.223T     | 2.936G         |
 |  gamma                           |  (1,)                  |            |                |
-|  f2p_win                         |  4.581M                |  89.378G   |  99.213M       |
-|   f2p_win.conv_c                 |   1.792K               |   86.4M    |   3.2M         |
+|  f2p_win                         |  2.44M                 |  0.462T    |  0.627G        |
+|   f2p_win.conv_c                 |   1.792K               |   0.498G   |   18.432M      |
 |    f2p_win.conv_c.weight         |    (64, 3, 3, 3)       |            |                |
 |    f2p_win.conv_c.bias           |    (64,)               |            |                |
-|   f2p_win.conv_sup               |   3.52K                |   0.173G   |   3.2M         |
+|   f2p_win.conv_sup               |   3.52K                |   0.995G   |   18.432M      |
 |    f2p_win.conv_sup.weight       |    (64, 6, 3, 3)       |            |                |
 |    f2p_win.conv_sup.bias         |    (64,)               |            |                |
-|   f2p_win.blocks                 |   4.465M               |   83.59G   |   89.613M      |
-|    f2p_win.blocks.0              |    0.345M              |    17.203G |    22.4M       |
-|    f2p_win.blocks.1              |    1.373M              |    22.129G |    22.404M     |
-|    f2p_win.blocks.2              |    1.373M              |    22.129G |    22.404M     |
-|    f2p_win.blocks.3              |    1.373M              |    22.129G |    22.404M     |
-|   f2p_win.merge                  |   0.111M               |   5.53G    |   3.2M         |
+|   f2p_win.blocks                 |   2.324M               |   0.428T   |   0.571G       |
+|    f2p_win.blocks.0              |    0.345M              |    99.09G  |    0.129G      |
+|    f2p_win.blocks.1              |    0.66M               |    0.11T   |    0.147G      |
+|    f2p_win.blocks.2              |    0.66M               |    0.11T   |    0.147G      |
+|    f2p_win.blocks.3              |    0.66M               |    0.11T   |    0.147G      |
+|   f2p_win.merge                  |   0.111M               |   31.85G   |   18.432M      |
 |    f2p_win.merge.weight          |    (64, 192, 3, 3)     |            |                |
 |    f2p_win.merge.bias            |    (64,)               |            |                |
-|  p2f_win                         |  4.581M                |  89.378G   |  99.213M       |
-|   p2f_win.conv_c                 |   1.792K               |   86.4M    |   3.2M         |
+|  p2f_win                         |  2.44M                 |  0.462T    |  0.627G        |
+|   p2f_win.conv_c                 |   1.792K               |   0.498G   |   18.432M      |
 |    p2f_win.conv_c.weight         |    (64, 3, 3, 3)       |            |                |
 |    p2f_win.conv_c.bias           |    (64,)               |            |                |
-|   p2f_win.conv_sup               |   3.52K                |   0.173G   |   3.2M         |
+|   p2f_win.conv_sup               |   3.52K                |   0.995G   |   18.432M      |
 |    p2f_win.conv_sup.weight       |    (64, 6, 3, 3)       |            |                |
 |    p2f_win.conv_sup.bias         |    (64,)               |            |                |
-|   p2f_win.blocks                 |   4.465M               |   83.59G   |   89.613M      |
-|    p2f_win.blocks.0              |    0.345M              |    17.203G |    22.4M       |
-|    p2f_win.blocks.1              |    1.373M              |    22.129G |    22.404M     |
-|    p2f_win.blocks.2              |    1.373M              |    22.129G |    22.404M     |
-|    p2f_win.blocks.3              |    1.373M              |    22.129G |    22.404M     |
-|   p2f_win.merge                  |   0.111M               |   5.53G    |   3.2M         |
+|   p2f_win.blocks                 |   2.324M               |   0.428T   |   0.571G       |
+|    p2f_win.blocks.0              |    0.345M              |    99.09G  |    0.129G      |
+|    p2f_win.blocks.1              |    0.66M               |    0.11T   |    0.147G      |
+|    p2f_win.blocks.2              |    0.66M               |    0.11T   |    0.147G      |
+|    p2f_win.blocks.3              |    0.66M               |    0.11T   |    0.147G      |
+|   p2f_win.merge                  |   0.111M               |   31.85G   |   18.432M      |
 |    p2f_win.merge.weight          |    (64, 192, 3, 3)     |            |                |
 |    p2f_win.merge.bias            |    (64,)               |            |                |
-|  h_win.0                         |  5.647M                |  22.126G   |  18.563M       |
-|   h_win.0.conv_h                 |   0.369M               |   3.686G   |   3.2M         |
-|    h_win.0.conv_h.0              |    73.792K             |    0.737G  |    0.64M       |
-|    h_win.0.conv_h.1              |    73.792K             |    0.737G  |    0.64M       |
-|    h_win.0.conv_h.2              |    73.792K             |    0.737G  |    0.64M       |
-|    h_win.0.conv_h.3              |    73.792K             |    0.737G  |    0.64M       |
-|    h_win.0.conv_h.4              |    73.792K             |    0.737G  |    0.64M       |
-|   h_win.0.blocks                 |   4.91M                |   14.753G  |   14.083M      |
-|    h_win.0.blocks.0              |    2.455M              |    7.376G  |    7.041M      |
-|    h_win.0.blocks.1              |    2.455M              |    7.376G  |    7.041M      |
-|   h_win.0.merge                  |   0.369M               |   3.686G   |   1.28M        |
+|  h_win.0                         |  2.517M                |  0.113T    |  0.114G        |
+|   h_win.0.conv_h                 |   0.369M               |   21.234G  |   18.432M      |
+|    h_win.0.conv_h.0              |    73.792K             |    4.247G  |    3.686M      |
+|    h_win.0.conv_h.1              |    73.792K             |    4.247G  |    3.686M      |
+|    h_win.0.conv_h.2              |    73.792K             |    4.247G  |    3.686M      |
+|    h_win.0.conv_h.3              |    73.792K             |    4.247G  |    3.686M      |
+|    h_win.0.conv_h.4              |    73.792K             |    4.247G  |    3.686M      |
+|   h_win.0.blocks                 |   1.779M               |   70.314G  |   88.474M      |
+|    h_win.0.blocks.0              |    0.889M              |    35.157G |    44.237M     |
+|    h_win.0.blocks.1              |    0.889M              |    35.157G |    44.237M     |
+|   h_win.0.merge                  |   0.369M               |   21.234G  |   7.373M       |
 |    h_win.0.merge.weight          |    (128, 320, 3, 3)    |            |                |
 |    h_win.0.merge.bias            |    (128,)              |            |                |
-|  h_win_conv_h                    |  73.792K               |  0.737G    |  0.64M         |
+|  h_win_conv_h                    |  73.792K               |  4.247G    |  3.686M        |
 |   h_win_conv_h.weight            |   (64, 128, 3, 3)      |            |                |
 |   h_win_conv_h.bias              |   (64,)                |            |                |
-|  RG                              |  2.53M                 |  25.088G   |  43.522M       |
-|   RG.0                           |   0.632M               |   6.272G   |   10.881M      |
-|    RG.0.residual_group           |    0.595M              |    5.903G  |    10.241M     |
-|    RG.0.conv                     |    36.928K             |    0.369G  |    0.64M       |
-|   RG.1                           |   0.632M               |   6.272G   |   10.881M      |
-|    RG.1.residual_group           |    0.595M              |    5.903G  |    10.241M     |
-|    RG.1.conv                     |    36.928K             |    0.369G  |    0.64M       |
-|   RG.2                           |   0.632M               |   6.272G   |   10.881M      |
-|    RG.2.residual_group           |    0.595M              |    5.903G  |    10.241M     |
-|    RG.2.conv                     |    36.928K             |    0.369G  |    0.64M       |
-|   RG.3                           |   0.632M               |   6.272G   |   10.881M      |
-|    RG.3.residual_group           |    0.595M              |    5.903G  |    10.241M     |
-|    RG.3.conv                     |    36.928K             |    0.369G  |    0.64M       |
-|  adapt                           |  1.318M                |  1.902G    |  3.561M        |
-|   adapt.0                        |   0.329M               |   0.476G   |   0.89M        |
-|    adapt.0.mask                  |    14.115K             |    0.106G  |    0.25M       |
-|    adapt.0.adapt                 |    0.315M              |    0.369G  |    0.64M       |
-|   adapt.1                        |   0.329M               |   0.476G   |   0.89M        |
-|    adapt.1.mask                  |    14.115K             |    0.106G  |    0.25M       |
-|    adapt.1.adapt                 |    0.315M              |    0.369G  |    0.64M       |
-|   adapt.2                        |   0.329M               |   0.476G   |   0.89M        |
-|    adapt.2.mask                  |    14.115K             |    0.106G  |    0.25M       |
-|    adapt.2.adapt                 |    0.315M              |    0.369G  |    0.64M       |
-|   adapt.3                        |   0.329M               |   0.476G   |   0.89M        |
-|    adapt.3.mask                  |    14.115K             |    0.106G  |    0.25M       |
-|    adapt.3.adapt                 |    0.315M              |    0.369G  |    0.64M       |
-|  conv_last                       |  36.928K               |  0.369G    |  0.64M         |
+|  RG                              |  2.53M                 |  0.145T    |  0.251G        |
+|   RG.0                           |   0.632M               |   36.127G  |   62.669M      |
+|    RG.0.residual_group           |    0.595M              |    34.003G |    58.983M     |
+|    RG.0.conv                     |    36.928K             |    2.123G  |    3.686M      |
+|   RG.1                           |   0.632M               |   36.127G  |   62.669M      |
+|    RG.1.residual_group           |    0.595M              |    34.003G |    58.983M     |
+|    RG.1.conv                     |    36.928K             |    2.123G  |    3.686M      |
+|   RG.2                           |   0.632M               |   36.127G  |   62.669M      |
+|    RG.2.residual_group           |    0.595M              |    34.003G |    58.983M     |
+|    RG.2.conv                     |    36.928K             |    2.123G  |    3.686M      |
+|   RG.3                           |   0.632M               |   36.127G  |   62.669M      |
+|    RG.3.residual_group           |    0.595M              |    34.003G |    58.983M     |
+|    RG.3.conv                     |    36.928K             |    2.123G  |    3.686M      |
+|  adapt                           |  1.318M                |  10.957G   |  20.507M       |
+|   adapt.0                        |   0.329M               |   2.739G   |   5.127M       |
+|    adapt.0.mask                  |    14.115K             |    0.612G  |    1.44M       |
+|    adapt.0.adapt                 |    0.315M              |    2.127G  |    3.687M      |
+|   adapt.1                        |   0.329M               |   2.739G   |   5.127M       |
+|    adapt.1.mask                  |    14.115K             |    0.612G  |    1.44M       |
+|    adapt.1.adapt                 |    0.315M              |    2.127G  |    3.687M      |
+|   adapt.2                        |   0.329M               |   2.739G   |   5.127M       |
+|    adapt.2.mask                  |    14.115K             |    0.612G  |    1.44M       |
+|    adapt.2.adapt                 |    0.315M              |    2.127G  |    3.687M      |
+|   adapt.3                        |   0.329M               |   2.739G   |   5.127M       |
+|    adapt.3.mask                  |    14.115K             |    0.612G  |    1.44M       |
+|    adapt.3.adapt                 |    0.315M              |    2.127G  |    3.687M      |
+|  conv_last                       |  36.928K               |  2.123G    |  3.686M        |
 |   conv_last.weight               |   (64, 64, 3, 3)       |            |                |
 |   conv_last.bias                 |   (64,)                |            |                |
-|  upsample                        |  0.121M                |  3.313G    |  0.175G        |
+|  upsample                        |  0.121M                |  23.121G   |  1.287G        |
 |   upsample.weight_compress       |   (4, 8, 64, 1, 1)     |            |                |
 |   upsample.weight_expand         |   (4, 64, 8, 1, 1)     |            |                |
-|   upsample.kernel_conv.0         |   0.104M               |   1.024G   |   16M          |
+|   upsample.kernel_conv.0         |   0.104M               |   5.898G   |   92.16M       |
 |    upsample.kernel_conv.0.weight |    (1600, 64, 1, 1)    |            |                |
 |    upsample.kernel_conv.0.bias   |    (1600,)             |            |                |
-|   upsample.body                  |   4.48K                |   0.533G   |   15.68M       |
-|    upsample.body.0               |    0.32K               |    31.36M  |    7.84M       |
-|    upsample.body.2               |    4.16K               |    0.502G  |    7.84M       |
-|   upsample.routing.0             |   0.26K                |   31.36M   |   0.49M        |
+|   upsample.body                  |   4.48K                |   4.011G   |   0.118G       |
+|    upsample.body.0               |    0.32K               |    0.236G  |    58.982M     |
+|    upsample.body.2               |    4.16K               |    3.775G  |    58.982M     |
+|   upsample.routing.0             |   0.26K                |   0.236G   |   3.686M       |
 |    upsample.routing.0.weight     |    (4, 64, 1, 1)       |            |                |
 |    upsample.routing.0.bias       |    (4,)                |            |                |
-|   upsample.offset                |   0.13K                |   15.68M   |   0.245M       |
+|   upsample.offset                |   0.13K                |   0.118G   |   1.843M       |
 |    upsample.offset.weight        |    (2, 64, 1, 1)       |            |                |
 |    upsample.offset.bias          |    (2,)                |            |                |
-|   upsample.st_offset             |   0.13K                |   15.68M   |   0.245M       |
+|   upsample.st_offset             |   0.13K                |   0.118G   |   1.843M       |
 |    upsample.st_offset.weight     |    (2, 64, 1, 1)       |            |                |
 |    upsample.st_offset.bias       |    (2,)                |            |                |
-|   upsample.fusion                |   8.256K               |   1.004G   |   7.84M        |
+|   upsample.fusion                |   8.256K               |   7.55G    |   58.982M      |
 |    upsample.fusion.weight        |    (64, 128, 1, 1)     |            |                |
 |    upsample.fusion.bias          |    (64,)               |            |                |
-|  tail                            |  1.731K                |  0.212G    |  0.367M        |
+|  tail                            |  1.731K                |  1.593G    |  2.765M        |
 |   tail.weight                    |   (3, 64, 3, 3)        |            |                |
 |   tail.bias                      |   (3,)                 |            |                |
-torch.Size([1, 3, 350, 350])
+torch.Size([1, 3, 720, 1280])
 """

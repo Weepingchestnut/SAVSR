@@ -379,6 +379,7 @@ def arbitrary_scale_downsample(x: Tensor, scale: Union[tuple, float], mode='torc
     """
     # if torch.cuda.is_available() and (not x.is_cuda):
     #     x = x.cuda()
+    # print(x.device)
     squeeze_flag = False
     if x.ndim == 4:
         squeeze_flag = True

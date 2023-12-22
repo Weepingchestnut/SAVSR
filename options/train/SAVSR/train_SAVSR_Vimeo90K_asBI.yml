@@ -1,20 +1,23 @@
 # general settings
-name: 540_3_0_ASVSR_Vimeo90K_asBI
+name: 540_3_0_SAVSR_Vimeo90K_asBI_1200k
 model_type: ASVSRModel
-scale: !!python/tuple [4, 4]
+# scale: !!python/tuple [4, 4]
 num_gpu: 2  # set num_gpu: 0 for cpu mode
-manual_seed: 0
+manual_seed: 101
 
 # dataset and data loader settings
 datasets:
   train:
     name: Vimeo90K
     type: ASVimeo90KDataset
-    dataroot_gt: datasets/vimeo90k/vimeo_septuplet/sequences
-    dataroot_lq: datasets/vimeo90k/vimeo_septuplet_matlabLRx4/sequences
+    # dataroot_gt: datasets/vimeo90k/vimeo_septuplet/sequences
+    # dataroot_lq: datasets/vimeo90k/vimeo_septuplet_matlabLRx4/sequences
+    dataroot_gt: datasets/vimeo90k/vimeo90k_train_GT7frames.lmdb
+    dataroot_lq: datasets/vimeo90k/vimeo90k_train_LR7frames.lmdb
     meta_info_file: lbasicsr/data/meta_info/meta_info_Vimeo90K_train_GT.txt
     io_backend:
-      type: disk
+      # type: disk
+      type: lmdb
 
     num_frame: 7
     # arbitrary scale dataset --------------------------
@@ -24,24 +27,24 @@ datasets:
     single_scale_ft: false              # only a scale
     CL_train_set: [120, 3, 5]           # Continuous learning training strategy
     # --------------------------------------------------
-    gt_size: 128                        # not needed
+    gt_size: 256                        # not needed
     interval_list: [1]
-    random_reverse: false
+    random_reverse: true
     use_hflip: true
     use_rot: true
-    flip_sequence: false
+    flip_sequence: false                # flip the sequence: 7 frames to 14 frames
 
     # data loader
-    num_worker_per_gpu: 6
-    batch_size_per_gpu: 8
+    num_worker_per_gpu: 8
+    batch_size_per_gpu: 16
     dataset_enlarge_ratio: 1
-#    prefetch_mode: ~
-    # cuda
-    prefetch_mode: cuda
-    pin_memory: true
+    prefetch_mode: ~
+    # ------ cuda ---------
+    # prefetch_mode: cuda
+    # pin_memory: true
 
-  val:
-    name: Vid4
+  val_x4:
+    name: Vid4_x4
     type: ASVideoTestDataset
     dataroot_gt: datasets/Vid4/GT
     dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4     # not needed
@@ -56,11 +59,44 @@ datasets:
     downsampling_scale: !!python/tuple [4, 4]
     downsampling_mode: torch
     # --------------------------------------------------
+  
+  val_x3:
+    name: Vid4_x3
+    type: ASVideoTestDataset
+    dataroot_gt: datasets/Vid4/GT
+    dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4     # not needed
+    io_backend:
+      type: disk
+
+    cache_data: false
+    num_frame: 7
+    padding: reflection    # [reflection, reflection_circle]
+    # arbitrary scale dataset --------------------------
+    use_arbitrary_scale_downsampling: true
+    downsampling_scale: !!python/tuple [3, 3]
+    downsampling_mode: torch
+    # --------------------------------------------------
+  
+  val_x2:
+    name: Vid4_x2
+    type: ASVideoTestDataset
+    dataroot_gt: datasets/Vid4/GT
+    dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4     # not needed
+    io_backend:
+      type: disk
+
+    cache_data: false
+    num_frame: 7
+    padding: reflection    # [reflection, reflection_circle]
+    # arbitrary scale dataset --------------------------
+    use_arbitrary_scale_downsampling: true
+    downsampling_scale: !!python/tuple [2, 2]
+    downsampling_mode: torch
+    # --------------------------------------------------
 
 # network structures
 network_g:
-  # ema_decay: 0.999
-  type: ASVSR
+  type: SAVSR
   num_in_ch: 3
   num_feat: 64
   num_frame: 7
@@ -89,20 +125,14 @@ train:
     betas: [ 0.9, 0.999 ]
 
   scheduler:
-    # CosineAnnealingRestartLR -------------------------------
+    # ------ CosineAnnealingRestartLR -----------
     type: CosineAnnealingRestartLR
-    periods: [ 150000, 150000, 150000, 150000 ]
+    periods: [ 300000, 300000, 300000, 300000 ]
     restart_weights: [ 1, 0.5, 0.5, 0.5 ]
     eta_min: !!float 1e-7
-    # fine-tune ---------------------------------------------
-    # type: MultiStepLR
-    # milestones: [50000, 100000]
-    # gamma: 0.1
-#    restarts: [150000, 150000, 150000, 150000]
-#    restart_weights: [ 1, 0.1, 0.1, 0.1 ]
 
-  total_iter: 600000    #600000
-  warmup_iter: -1  # -1 no warm up
+  total_iter: 1200000       # 600000
+  warmup_iter: -1           # -1 no warm up
 
   # losses
   pixel_opt:
@@ -139,4 +169,4 @@ dist_params:
   backend: nccl
   port: 29500
 
-find_unused_parameters: true
+# find_unused_parameters: true

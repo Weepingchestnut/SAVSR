@@ -1,5 +1,5 @@
 # general settings
-name: 540_3_1_ASVSR_1200k_UDM10_asBI
+name: test_SAVSR_UDM10_asBI
 model_type: ASVSRModel
 # scale: !!python/tuple [3.8, 3.8]
 num_gpu: 1  # set num_gpu: 0 for cpu mode
@@ -7,7 +7,7 @@ manual_seed: 0
 
 # dataset and data loader settings
 datasets:
-  # symmetr scale
+  # ====== symmetr scale =================================
   test_01:
     name: UDM10_x4
     type: ASVideoTestDataset
@@ -518,7 +518,7 @@ datasets:
     downsampling_mode: torch
     # --------------------------------------------------
   
-  # asymmetr scale
+  # ====== asymmetr scale ===============================
   test_31:
     name: UDM10_x1.5_x4
     type: ASVideoTestDataset
@@ -725,7 +725,7 @@ datasets:
 
 # network structures
 network_g:
-  type: ASVSR
+  type: SAVSR
   num_in_ch: 3
   num_feat: 64
   num_frame: 7
@@ -740,7 +740,7 @@ network_g:
 
 # path
 path:
-  pretrain_network_g: experiments/540_3_1_ASVSR_Vimeo90K_asBI_1200k/models/net_g_1195000.pth
+  pretrain_network_g: ~
   # param_key_g: params_ema
   strict_load_g: true
   resume_state: ~
