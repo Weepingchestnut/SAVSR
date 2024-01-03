@@ -376,6 +376,45 @@ class STAUpsample(nn.Module):
         return out
 
 
+class ResidualBlock(nn.Module):
+
+    def __init__(self, num_feat=64, num_frame=3, act=nn.LeakyReLU(0.2, True), use_osconv=False):
+        super(ResidualBlock, self).__init__()
+        self.nfe = num_feat
+        self.nfr = num_frame
+        self.act = act
+        self.use_osconv = use_osconv
+
+        self.conv0 = nn.Sequential(*[nn.Conv2d(num_feat, num_feat, kernel_size=3, stride=1, padding=1)
+                                     for _ in range(num_frame)])
+        
+        if use_osconv:
+            self.osconv = OSConv2d(num_feat * num_frame, num_feat, kernel_size=3, stride=1, padding=1)
+        else:
+            # 1x1 conv to reduce dim
+            self.conv1 = nn.Conv2d(num_feat * num_frame, num_feat, kernel_size=1, stride=1)
+        self.conv2 = nn.Sequential(*[nn.Conv2d(num_feat * 2, num_feat, kernel_size=3, stride=1, padding=1)
+                                     for _ in range(num_frame)])
+
+    def forward(self, input: List):     # input [feat, scale]
+        x, scale = input[0], input[1]
+
+        x1 = [self.act(self.conv0[i](x[i])) for i in range(self.nfr)]
+
+        merge = torch.cat(x1, dim=1)
+        # base = self.act(self.conv1(merge))
+
+        if self.use_osconv:
+            base = self.act(self.osconv(merge, scale))
+        else:
+            base = self.act(self.conv1(merge))
+
+        x2 = [torch.cat([base, i], 1) for i in x1]
+        x2 = [self.act(self.conv2[i](x2[i])) for i in range(self.nfr)]
+
+        return [[torch.add(x[i], x2[i]) for i in range(self.nfr)], scale]
+
+
 # class ResidualBlock(nn.Module):
 
 #     def __init__(self, num_feat=64, num_frame=3, act=nn.LeakyReLU(0.2, True), use_osconv=False):
@@ -387,12 +426,10 @@ class STAUpsample(nn.Module):
 
 #         self.conv0 = nn.Sequential(*[nn.Conv2d(num_feat, num_feat, kernel_size=3, stride=1, padding=1)
 #                                      for _ in range(num_frame)])
-        
+#         # 1x1 conv to reduce dim
+#         self.conv1 = nn.Conv2d(num_feat * num_frame, num_feat, kernel_size=1, stride=1)
 #         if use_osconv:
-#             self.osconv = OSConv2d(num_feat * num_frame, num_feat, kernel_size=3, stride=1, padding=1)
-#         else:
-#             # 1x1 conv to reduce dim
-#             self.conv1 = nn.Conv2d(num_feat * num_frame, num_feat, kernel_size=1, stride=1)
+#             self.osconv = OSConv2d(num_feat, num_feat, kernel_size=3, stride=1, padding=1)
 #         self.conv2 = nn.Sequential(*[nn.Conv2d(num_feat * 2, num_feat, kernel_size=3, stride=1, padding=1)
 #                                      for _ in range(num_frame)])
 
@@ -402,58 +439,18 @@ class STAUpsample(nn.Module):
 #         x1 = [self.act(self.conv0[i](x[i])) for i in range(self.nfr)]
 
 #         merge = torch.cat(x1, dim=1)
-#         # base = self.act(self.conv1(merge))
+#         base = self.act(self.conv1(merge))
 
 #         if self.use_osconv:
-#             base = self.act(self.osconv(merge, scale))
-#         else:
-#             base = self.act(self.conv1(merge))
+#             # 518: add residual ------------
+#             res = self.act(self.osconv(base, scale))
+#             base = res + base
+#             # ------------------------------
 
 #         x2 = [torch.cat([base, i], 1) for i in x1]
 #         x2 = [self.act(self.conv2[i](x2[i])) for i in range(self.nfr)]
 
 #         return [[torch.add(x[i], x2[i]) for i in range(self.nfr)], scale]
-
-
-class ResidualBlock(nn.Module):
-    """
-    先仿照 OVSR 中的 PFRB 构建多帧隐特征的残差融合块
-    """
-
-    def __init__(self, num_feat=64, num_frame=3, act=nn.LeakyReLU(0.2, True), use_osconv=False):
-        super(ResidualBlock, self).__init__()
-        self.nfe = num_feat
-        self.nfr = num_frame
-        self.act = act
-        self.use_osconv = use_osconv
-
-        self.conv0 = nn.Sequential(*[nn.Conv2d(num_feat, num_feat, kernel_size=3, stride=1, padding=1)
-                                     for _ in range(num_frame)])
-        # 1x1 conv to reduce dim
-        self.conv1 = nn.Conv2d(num_feat * num_frame, num_feat, kernel_size=1, stride=1)
-        if use_osconv:
-            self.osconv = OSConv2d(num_feat, num_feat, kernel_size=3, stride=1, padding=1)
-        self.conv2 = nn.Sequential(*[nn.Conv2d(num_feat * 2, num_feat, kernel_size=3, stride=1, padding=1)
-                                     for _ in range(num_frame)])
-
-    def forward(self, input: List):     # input [feat, scale]
-        x, scale = input[0], input[1]
-
-        x1 = [self.act(self.conv0[i](x[i])) for i in range(self.nfr)]
-
-        merge = torch.cat(x1, dim=1)
-        base = self.act(self.conv1(merge))
-
-        if self.use_osconv:
-            # 518: add residual ------------
-            res = self.act(self.osconv(base, scale))
-            base = res + base
-            # ------------------------------
-
-        x2 = [torch.cat([base, i], 1) for i in x1]
-        x2 = [self.act(self.conv2[i](x2[i])) for i in range(self.nfr)]
-
-        return [[torch.add(x[i], x2[i]) for i in range(self.nfr)], scale]
 
 
 class WindowUnit_l1(nn.Module):
@@ -616,17 +613,17 @@ class ResidualGroup(nn.Module):
 @ARCH_REGISTRY.register()
 class SAVSR(nn.Module):
     def __init__(self,
-                 num_in_ch: int = 3,
-                 num_feat: int = 64,
-                 num_frame: int = 7,
-                 slid_win: int = 3,
-                 fusion_win: int = 5,
-                 interval: int = 0,
-                 w1_num_block: int = 4,
-                 w2_num_block: int = 2,
-                 n_resgroups: int = 4,
-                 n_resblocks: int = 8,
-                 downsample_scale: int = 2,
+                 num_in_ch=3,
+                 num_feat=64,
+                 num_frame=7,
+                 slid_win=3,
+                 fusion_win=5,
+                 interval=0,
+                 w1_num_block=4,
+                 w2_num_block=2,
+                 n_resgroups=4,
+                 n_resblocks=8,
+                 downsample_scale=2,
                  center_frame_idx=None,
                  ):
         super(SAVSR, self).__init__()
@@ -790,9 +787,9 @@ def get_HW_round(h, w, scale: tuple):
 def get_HW_int(h, w, scale: tuple):
     return int(h * scale[0]), int(w * scale[1])
 
-# get_HW = get_HW_round
+get_HW = get_HW_round
 # ------ for fvcore ------
-get_HW = get_HW_int
+# get_HW = get_HW_int
 
 
 if __name__ == '__main__':
@@ -800,8 +797,6 @@ if __name__ == '__main__':
     from fvcore.nn import flop_count_table, FlopCountAnalysis, ActivationCountAnalysis
 
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    # device = 'cpu'
-    repetitions = 300
 
     num_frame = 7
     slid_win = 3
@@ -815,9 +810,6 @@ if __name__ == '__main__':
         [(0, 1, 2, 3, 4)]       fusion_win = 5
     """
     
-    # ----------------------------------------
-    # problem scale and shape: x1.2, 480x585
-    # ----------------------------------------
     scale = (4, 4)
     model = SAVSR(
         num_frame=num_frame, 
@@ -855,140 +847,3 @@ if __name__ == '__main__':
         print(flop_count_table(FlopCountAnalysis(model, input), activations=ActivationCountAnalysis(model, input)))
         out = model(input)
     print(out.shape)
-
-
-"""
-STAGE:2023-12-21 21:59:44 792942:792942 ActivityProfilerController.cpp:312] Completed Stage: Warm Up
-STAGE:2023-12-21 21:59:59 792942:792942 ActivityProfilerController.cpp:318] Completed Stage: Collection
-STAGE:2023-12-21 21:59:59 792942:792942 ActivityProfilerController.cpp:322] Completed Stage: Post Processing
--------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
-                                                   Name    Self CPU %      Self CPU   CPU total %     CPU total  CPU time avg     Self CUDA   Self CUDA %    CUDA total  CUDA time avg       CPU Mem  Self CPU Mem      CUDA Mem  Self CUDA Mem    # of Calls  
--------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
-                                        model_inference         0.50%      71.937ms       100.00%       14.283s       14.283s       0.000us         0.00%     223.570ms     223.570ms       1.44 Kb     -14.08 Mb      20.94 Gb      -3.55 Gb             1  
-                                      aten::convolution         0.04%       6.088ms        90.64%       12.947s      18.184ms       0.000us         0.00%     127.800ms     179.494us           0 b           0 b       7.18 Gb           0 b           712  
-                                     aten::_convolution         0.05%       7.440ms        90.60%       12.941s      18.176ms       0.000us         0.00%     127.800ms     179.494us           0 b           0 b       7.18 Gb           0 b           712  
-                                           aten::conv2d         0.04%       5.643ms        90.66%       12.949s      18.187ms       0.000us         0.00%     124.232ms     174.483us           0 b           0 b       7.18 Gb     225.01 Mb           712  
-                                aten::cudnn_convolution        79.68%       11.381s        90.46%       12.922s      18.148ms      84.745ms        43.02%     106.426ms     149.475us           0 b           0 b       7.18 Gb       7.18 Gb           712  
-cudnn_infer_ampere_scudnn_winograd_128x128_ldg1_ldg4...         0.00%       0.000us         0.00%       0.000us       0.000us      69.762ms        35.41%      69.762ms     181.672us           0 b           0 b           0 b           0 b           384  
-                                              aten::cat         0.04%       5.923ms         1.98%     282.768ms       1.071ms      24.713ms        12.55%      25.362ms      96.068us           0 b           0 b       6.44 Gb       6.44 Gb           264  
-void at::native::elementwise_kernel<128, 2, at::nati...         0.00%       0.000us         0.00%       0.000us       0.000us      22.407ms        11.37%      22.407ms      51.510us           0 b           0 b           0 b           0 b           435  
-                                             aten::add_         0.05%       6.706ms         0.07%      10.231ms      15.961us      21.186ms        10.75%      21.441ms      33.449us           0 b           0 b           0 b           0 b           641  
-void at::native::(anonymous namespace)::CatArrayBatc...         0.00%       0.000us         0.00%       0.000us       0.000us      19.346ms         9.82%      19.346ms     101.821us           0 b           0 b           0 b           0 b           190  
--------------------------------------------------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  ------------  
-Self CPU time total: 14.283s
-Self CUDA time total: 196.992ms
-
-Warm up ...
-
-Testing ...
-
-100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████| 300/300 [01:09<00:00,  4.30it/s]
-
-Average Runtime: 232.156 ms
-
-Model have 11.477M parameters in total
-| module                           | #parameters or shape   | #flops     | #activations   |
-|:---------------------------------|:-----------------------|:-----------|:---------------|
-| model                            | 11.477M                | 1.223T     | 2.936G         |
-|  gamma                           |  (1,)                  |            |                |
-|  f2p_win                         |  2.44M                 |  0.462T    |  0.627G        |
-|   f2p_win.conv_c                 |   1.792K               |   0.498G   |   18.432M      |
-|    f2p_win.conv_c.weight         |    (64, 3, 3, 3)       |            |                |
-|    f2p_win.conv_c.bias           |    (64,)               |            |                |
-|   f2p_win.conv_sup               |   3.52K                |   0.995G   |   18.432M      |
-|    f2p_win.conv_sup.weight       |    (64, 6, 3, 3)       |            |                |
-|    f2p_win.conv_sup.bias         |    (64,)               |            |                |
-|   f2p_win.blocks                 |   2.324M               |   0.428T   |   0.571G       |
-|    f2p_win.blocks.0              |    0.345M              |    99.09G  |    0.129G      |
-|    f2p_win.blocks.1              |    0.66M               |    0.11T   |    0.147G      |
-|    f2p_win.blocks.2              |    0.66M               |    0.11T   |    0.147G      |
-|    f2p_win.blocks.3              |    0.66M               |    0.11T   |    0.147G      |
-|   f2p_win.merge                  |   0.111M               |   31.85G   |   18.432M      |
-|    f2p_win.merge.weight          |    (64, 192, 3, 3)     |            |                |
-|    f2p_win.merge.bias            |    (64,)               |            |                |
-|  p2f_win                         |  2.44M                 |  0.462T    |  0.627G        |
-|   p2f_win.conv_c                 |   1.792K               |   0.498G   |   18.432M      |
-|    p2f_win.conv_c.weight         |    (64, 3, 3, 3)       |            |                |
-|    p2f_win.conv_c.bias           |    (64,)               |            |                |
-|   p2f_win.conv_sup               |   3.52K                |   0.995G   |   18.432M      |
-|    p2f_win.conv_sup.weight       |    (64, 6, 3, 3)       |            |                |
-|    p2f_win.conv_sup.bias         |    (64,)               |            |                |
-|   p2f_win.blocks                 |   2.324M               |   0.428T   |   0.571G       |
-|    p2f_win.blocks.0              |    0.345M              |    99.09G  |    0.129G      |
-|    p2f_win.blocks.1              |    0.66M               |    0.11T   |    0.147G      |
-|    p2f_win.blocks.2              |    0.66M               |    0.11T   |    0.147G      |
-|    p2f_win.blocks.3              |    0.66M               |    0.11T   |    0.147G      |
-|   p2f_win.merge                  |   0.111M               |   31.85G   |   18.432M      |
-|    p2f_win.merge.weight          |    (64, 192, 3, 3)     |            |                |
-|    p2f_win.merge.bias            |    (64,)               |            |                |
-|  h_win.0                         |  2.517M                |  0.113T    |  0.114G        |
-|   h_win.0.conv_h                 |   0.369M               |   21.234G  |   18.432M      |
-|    h_win.0.conv_h.0              |    73.792K             |    4.247G  |    3.686M      |
-|    h_win.0.conv_h.1              |    73.792K             |    4.247G  |    3.686M      |
-|    h_win.0.conv_h.2              |    73.792K             |    4.247G  |    3.686M      |
-|    h_win.0.conv_h.3              |    73.792K             |    4.247G  |    3.686M      |
-|    h_win.0.conv_h.4              |    73.792K             |    4.247G  |    3.686M      |
-|   h_win.0.blocks                 |   1.779M               |   70.314G  |   88.474M      |
-|    h_win.0.blocks.0              |    0.889M              |    35.157G |    44.237M     |
-|    h_win.0.blocks.1              |    0.889M              |    35.157G |    44.237M     |
-|   h_win.0.merge                  |   0.369M               |   21.234G  |   7.373M       |
-|    h_win.0.merge.weight          |    (128, 320, 3, 3)    |            |                |
-|    h_win.0.merge.bias            |    (128,)              |            |                |
-|  h_win_conv_h                    |  73.792K               |  4.247G    |  3.686M        |
-|   h_win_conv_h.weight            |   (64, 128, 3, 3)      |            |                |
-|   h_win_conv_h.bias              |   (64,)                |            |                |
-|  RG                              |  2.53M                 |  0.145T    |  0.251G        |
-|   RG.0                           |   0.632M               |   36.127G  |   62.669M      |
-|    RG.0.residual_group           |    0.595M              |    34.003G |    58.983M     |
-|    RG.0.conv                     |    36.928K             |    2.123G  |    3.686M      |
-|   RG.1                           |   0.632M               |   36.127G  |   62.669M      |
-|    RG.1.residual_group           |    0.595M              |    34.003G |    58.983M     |
-|    RG.1.conv                     |    36.928K             |    2.123G  |    3.686M      |
-|   RG.2                           |   0.632M               |   36.127G  |   62.669M      |
-|    RG.2.residual_group           |    0.595M              |    34.003G |    58.983M     |
-|    RG.2.conv                     |    36.928K             |    2.123G  |    3.686M      |
-|   RG.3                           |   0.632M               |   36.127G  |   62.669M      |
-|    RG.3.residual_group           |    0.595M              |    34.003G |    58.983M     |
-|    RG.3.conv                     |    36.928K             |    2.123G  |    3.686M      |
-|  adapt                           |  1.318M                |  10.957G   |  20.507M       |
-|   adapt.0                        |   0.329M               |   2.739G   |   5.127M       |
-|    adapt.0.mask                  |    14.115K             |    0.612G  |    1.44M       |
-|    adapt.0.adapt                 |    0.315M              |    2.127G  |    3.687M      |
-|   adapt.1                        |   0.329M               |   2.739G   |   5.127M       |
-|    adapt.1.mask                  |    14.115K             |    0.612G  |    1.44M       |
-|    adapt.1.adapt                 |    0.315M              |    2.127G  |    3.687M      |
-|   adapt.2                        |   0.329M               |   2.739G   |   5.127M       |
-|    adapt.2.mask                  |    14.115K             |    0.612G  |    1.44M       |
-|    adapt.2.adapt                 |    0.315M              |    2.127G  |    3.687M      |
-|   adapt.3                        |   0.329M               |   2.739G   |   5.127M       |
-|    adapt.3.mask                  |    14.115K             |    0.612G  |    1.44M       |
-|    adapt.3.adapt                 |    0.315M              |    2.127G  |    3.687M      |
-|  conv_last                       |  36.928K               |  2.123G    |  3.686M        |
-|   conv_last.weight               |   (64, 64, 3, 3)       |            |                |
-|   conv_last.bias                 |   (64,)                |            |                |
-|  upsample                        |  0.121M                |  23.121G   |  1.287G        |
-|   upsample.weight_compress       |   (4, 8, 64, 1, 1)     |            |                |
-|   upsample.weight_expand         |   (4, 64, 8, 1, 1)     |            |                |
-|   upsample.kernel_conv.0         |   0.104M               |   5.898G   |   92.16M       |
-|    upsample.kernel_conv.0.weight |    (1600, 64, 1, 1)    |            |                |
-|    upsample.kernel_conv.0.bias   |    (1600,)             |            |                |
-|   upsample.body                  |   4.48K                |   4.011G   |   0.118G       |
-|    upsample.body.0               |    0.32K               |    0.236G  |    58.982M     |
-|    upsample.body.2               |    4.16K               |    3.775G  |    58.982M     |
-|   upsample.routing.0             |   0.26K                |   0.236G   |   3.686M       |
-|    upsample.routing.0.weight     |    (4, 64, 1, 1)       |            |                |
-|    upsample.routing.0.bias       |    (4,)                |            |                |
-|   upsample.offset                |   0.13K                |   0.118G   |   1.843M       |
-|    upsample.offset.weight        |    (2, 64, 1, 1)       |            |                |
-|    upsample.offset.bias          |    (2,)                |            |                |
-|   upsample.st_offset             |   0.13K                |   0.118G   |   1.843M       |
-|    upsample.st_offset.weight     |    (2, 64, 1, 1)       |            |                |
-|    upsample.st_offset.bias       |    (2,)                |            |                |
-|   upsample.fusion                |   8.256K               |   7.55G    |   58.982M      |
-|    upsample.fusion.weight        |    (64, 128, 1, 1)     |            |                |
-|    upsample.fusion.bias          |    (64,)               |            |                |
-|  tail                            |  1.731K                |  1.593G    |  2.765M        |
-|   tail.weight                    |   (3, 64, 3, 3)        |            |                |
-|   tail.bias                      |   (3,)                 |            |                |
-torch.Size([1, 3, 720, 1280])
-"""

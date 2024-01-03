@@ -1,9 +1,9 @@
 # general settings
-name: 540_3_0_SAVSR_Vimeo90K_asBI_1200k
+name: SAVSR_Vimeo90K_asBI
 model_type: ASVSRModel
 # scale: !!python/tuple [4, 4]
 num_gpu: 2  # set num_gpu: 0 for cpu mode
-manual_seed: 101
+manual_seed: 114514
 
 # dataset and data loader settings
 datasets:
@@ -25,7 +25,7 @@ datasets:
     downsample_mode: torch              # [torch, core, numpy]
     init_int_scale: true                # scale x2, x3, x4 for 1 epoch
     single_scale_ft: false              # only a scale
-    CL_train_set: [120, 3, 5]           # Continuous learning training strategy
+    CL_train_set: [240, 3, 5]           # Continuous learning training strategy
     # --------------------------------------------------
     gt_size: 256                        # not needed
     interval_list: [1]

@@ -740,7 +740,7 @@ network_g:
 
 # path
 path:
-  pretrain_network_g: ~
+  pretrain_network_g: experiments/pretrained_models/SAVSR/savsr_best.pth
   # param_key_g: params_ema
   strict_load_g: true
   resume_state: ~

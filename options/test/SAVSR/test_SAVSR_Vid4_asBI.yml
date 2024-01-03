@@ -519,209 +519,312 @@ datasets:
     # --------------------------------------------------
   
   # ====== asymmetr scale ============================================
-  # test_01:
-  #   name: Vid4_x1.5_x4
-  #   type: ASVideoTestDataset
-  #   dataroot_gt: datasets/Vid4/GT
-  #   dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4    # not needed
-  #   io_backend:
-  #     type: disk
+  test_31:
+    name: Vid4_x1.5_x4
+    type: ASVideoTestDataset
+    dataroot_gt: datasets/Vid4/GT
+    dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4    # not needed
+    io_backend:
+      type: disk
 
-  #   cache_data: false
-  #   num_frame: 7
-  #   padding: reflection    # [reflection, reflection_circle]
-  #   # arbitrary scale dataset --------------------------
-  #   use_arbitrary_scale_downsampling: true
-  #   downsampling_scale: !!python/tuple [1.5, 4]
-  #   downsampling_mode: torch
-  #   # --------------------------------------------------
+    cache_data: false
+    num_frame: 7
+    padding: reflection    # [reflection, reflection_circle]
+    # arbitrary scale dataset --------------------------
+    use_arbitrary_scale_downsampling: true
+    downsampling_scale: !!python/tuple [1.5, 4]
+    downsampling_mode: torch
+    # --------------------------------------------------
   
-  # test_02:
-  #   name: Vid4_x2_x4
-  #   type: ASVideoTestDataset
-  #   dataroot_gt: datasets/Vid4/GT
-  #   dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4    # not needed
-  #   io_backend:
-  #     type: disk
+  test_32:
+    name: Vid4_x2_x4
+    type: ASVideoTestDataset
+    dataroot_gt: datasets/Vid4/GT
+    dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4    # not needed
+    io_backend:
+      type: disk
 
-  #   cache_data: false
-  #   num_frame: 7
-  #   padding: reflection    # [reflection, reflection_circle]
-  #   # arbitrary scale dataset --------------------------
-  #   use_arbitrary_scale_downsampling: true
-  #   downsampling_scale: !!python/tuple [2, 4]
-  #   downsampling_mode: torch
-  #   # --------------------------------------------------
+    cache_data: false
+    num_frame: 7
+    padding: reflection    # [reflection, reflection_circle]
+    # arbitrary scale dataset --------------------------
+    use_arbitrary_scale_downsampling: true
+    downsampling_scale: !!python/tuple [2, 4]
+    downsampling_mode: torch
+    # --------------------------------------------------
   
-  # test_03:
-  #   name: Vid4_x2_x3.75
-  #   type: ASVideoTestDataset
-  #   dataroot_gt: datasets/Vid4/GT
-  #   dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4    # not needed
-  #   io_backend:
-  #     type: disk
+  test_33:
+    name: Vid4_x2_x3.75
+    type: ASVideoTestDataset
+    dataroot_gt: datasets/Vid4/GT
+    dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4    # not needed
+    io_backend:
+      type: disk
 
-  #   cache_data: false
-  #   num_frame: 7
-  #   padding: reflection    # [reflection, reflection_circle]
-  #   # arbitrary scale dataset --------------------------
-  #   use_arbitrary_scale_downsampling: true
-  #   downsampling_scale: !!python/tuple [2, 3.75]
-  #   downsampling_mode: torch
-  #   # --------------------------------------------------
+    cache_data: false
+    num_frame: 7
+    padding: reflection    # [reflection, reflection_circle]
+    # arbitrary scale dataset --------------------------
+    use_arbitrary_scale_downsampling: true
+    downsampling_scale: !!python/tuple [2, 3.75]
+    downsampling_mode: torch
+    # --------------------------------------------------
   
-  # test_04:
-  #   name: Vid4_x1.5_x3.5
-  #   type: ASVideoTestDataset
-  #   dataroot_gt: datasets/Vid4/GT
-  #   dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4    # not needed
-  #   io_backend:
-  #     type: disk
+  test_34:
+    name: Vid4_x1.5_x3.5
+    type: ASVideoTestDataset
+    dataroot_gt: datasets/Vid4/GT
+    dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4    # not needed
+    io_backend:
+      type: disk
 
-  #   cache_data: false
-  #   num_frame: 7
-  #   padding: reflection    # [reflection, reflection_circle]
-  #   # arbitrary scale dataset --------------------------
-  #   use_arbitrary_scale_downsampling: true
-  #   downsampling_scale: !!python/tuple [1.5, 3.5]
-  #   downsampling_mode: torch
-  #   # --------------------------------------------------
+    cache_data: false
+    num_frame: 7
+    padding: reflection    # [reflection, reflection_circle]
+    # arbitrary scale dataset --------------------------
+    use_arbitrary_scale_downsampling: true
+    downsampling_scale: !!python/tuple [1.5, 3.5]
+    downsampling_mode: torch
+    # --------------------------------------------------
   
-  # test_05:
-  #   name: Vid4_x1.6_x3.05
-  #   type: ASVideoTestDataset
-  #   dataroot_gt: datasets/Vid4/GT
-  #   dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4    # not needed
-  #   io_backend:
-  #     type: disk
+  test_35:
+    name: Vid4_x1.6_x3.05
+    type: ASVideoTestDataset
+    dataroot_gt: datasets/Vid4/GT
+    dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4    # not needed
+    io_backend:
+      type: disk
 
-  #   cache_data: false
-  #   num_frame: 7
-  #   padding: reflection    # [reflection, reflection_circle]
-  #   # arbitrary scale dataset --------------------------
-  #   use_arbitrary_scale_downsampling: true
-  #   downsampling_scale: !!python/tuple [1.6, 3.05]
-  #   downsampling_mode: torch
-  #   # --------------------------------------------------
+    cache_data: false
+    num_frame: 7
+    padding: reflection    # [reflection, reflection_circle]
+    # arbitrary scale dataset --------------------------
+    use_arbitrary_scale_downsampling: true
+    downsampling_scale: !!python/tuple [1.6, 3.05]
+    downsampling_mode: torch
+    # --------------------------------------------------
   
-  # test_06:
-  #   name: Vid4_x1.7_x3.75
-  #   type: ASVideoTestDataset
-  #   dataroot_gt: datasets/Vid4/GT
-  #   dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4    # not needed
-  #   io_backend:
-  #     type: disk
+  test_36:
+    name: Vid4_x1.7_x3.75
+    type: ASVideoTestDataset
+    dataroot_gt: datasets/Vid4/GT
+    dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4    # not needed
+    io_backend:
+      type: disk
 
-  #   cache_data: false
-  #   num_frame: 7
-  #   padding: reflection    # [reflection, reflection_circle]
-  #   # arbitrary scale dataset --------------------------
-  #   use_arbitrary_scale_downsampling: true
-  #   downsampling_scale: !!python/tuple [1.7, 3.75]
-  #   downsampling_mode: torch
-  #   # --------------------------------------------------
+    cache_data: false
+    num_frame: 7
+    padding: reflection    # [reflection, reflection_circle]
+    # arbitrary scale dataset --------------------------
+    use_arbitrary_scale_downsampling: true
+    downsampling_scale: !!python/tuple [1.7, 3.75]
+    downsampling_mode: torch
+    # --------------------------------------------------
   
-  # test_07:
-  #   name: Vid4_x2.95_x3.75
-  #   type: ASVideoTestDataset
-  #   dataroot_gt: datasets/Vid4/GT
-  #   dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4    # not needed
-  #   io_backend:
-  #     type: disk
+  test_37:
+    name: Vid4_x2.95_x3.75
+    type: ASVideoTestDataset
+    dataroot_gt: datasets/Vid4/GT
+    dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4    # not needed
+    io_backend:
+      type: disk
 
-  #   cache_data: false
-  #   num_frame: 7
-  #   padding: reflection    # [reflection, reflection_circle]
-  #   # arbitrary scale dataset --------------------------
-  #   use_arbitrary_scale_downsampling: true
-  #   downsampling_scale: !!python/tuple [2.95, 3.75]
-  #   downsampling_mode: torch
-  #   # --------------------------------------------------
+    cache_data: false
+    num_frame: 7
+    padding: reflection    # [reflection, reflection_circle]
+    # arbitrary scale dataset --------------------------
+    use_arbitrary_scale_downsampling: true
+    downsampling_scale: !!python/tuple [2.95, 3.75]
+    downsampling_mode: torch
+    # --------------------------------------------------
   
-  # test_08:
-  #   name: Vid4_x3.9_x2
-  #   type: ASVideoTestDataset
-  #   dataroot_gt: datasets/Vid4/GT
-  #   dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4    # not needed
-  #   io_backend:
-  #     type: disk
+  test_38:
+    name: Vid4_x3.9_x2
+    type: ASVideoTestDataset
+    dataroot_gt: datasets/Vid4/GT
+    dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4    # not needed
+    io_backend:
+      type: disk
 
-  #   cache_data: false
-  #   num_frame: 7
-  #   padding: reflection    # [reflection, reflection_circle]
-  #   # arbitrary scale dataset --------------------------
-  #   use_arbitrary_scale_downsampling: true
-  #   downsampling_scale: !!python/tuple [3.9, 2]
-  #   downsampling_mode: torch
-  #   # --------------------------------------------------
+    cache_data: false
+    num_frame: 7
+    padding: reflection    # [reflection, reflection_circle]
+    # arbitrary scale dataset --------------------------
+    use_arbitrary_scale_downsampling: true
+    downsampling_scale: !!python/tuple [3.9, 2]
+    downsampling_mode: torch
+    # --------------------------------------------------
   
-  # test_09:
-  #   name: Vid4_x3.5_x1.5
-  #   type: ASVideoTestDataset
-  #   dataroot_gt: datasets/Vid4/GT
-  #   dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4    # not needed
-  #   io_backend:
-  #     type: disk
+  test_39:
+    name: Vid4_x3.5_x1.5
+    type: ASVideoTestDataset
+    dataroot_gt: datasets/Vid4/GT
+    dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4    # not needed
+    io_backend:
+      type: disk
 
-  #   cache_data: false
-  #   num_frame: 7
-  #   padding: reflection    # [reflection, reflection_circle]
-  #   # arbitrary scale dataset --------------------------
-  #   use_arbitrary_scale_downsampling: true
-  #   downsampling_scale: !!python/tuple [3.5, 1.5]
-  #   downsampling_mode: torch
-  #   # --------------------------------------------------
+    cache_data: false
+    num_frame: 7
+    padding: reflection    # [reflection, reflection_circle]
+    # arbitrary scale dataset --------------------------
+    use_arbitrary_scale_downsampling: true
+    downsampling_scale: !!python/tuple [3.5, 1.5]
+    downsampling_mode: torch
+    # --------------------------------------------------
   
-  # test_10:
-  #   name: Vid4_x3.5_x2
-  #   type: ASVideoTestDataset
-  #   dataroot_gt: datasets/Vid4/GT
-  #   dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4    # not needed
-  #   io_backend:
-  #     type: disk
+  test_40:
+    name: Vid4_x3.5_x2
+    type: ASVideoTestDataset
+    dataroot_gt: datasets/Vid4/GT
+    dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4    # not needed
+    io_backend:
+      type: disk
 
-  #   cache_data: false
-  #   num_frame: 7
-  #   padding: reflection    # [reflection, reflection_circle]
-  #   # arbitrary scale dataset --------------------------
-  #   use_arbitrary_scale_downsampling: true
-  #   downsampling_scale: !!python/tuple [3.5, 2]
-  #   downsampling_mode: torch
-  #   # --------------------------------------------------
+    cache_data: false
+    num_frame: 7
+    padding: reflection    # [reflection, reflection_circle]
+    # arbitrary scale dataset --------------------------
+    use_arbitrary_scale_downsampling: true
+    downsampling_scale: !!python/tuple [3.5, 2]
+    downsampling_mode: torch
+    # --------------------------------------------------
   
-  # test_11:
-  #   name: Vid4_x3.5_x1.75
-  #   type: ASVideoTestDataset
-  #   dataroot_gt: datasets/Vid4/GT
-  #   dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4    # not needed
-  #   io_backend:
-  #     type: disk
+  test_41:
+    name: Vid4_x3.5_x1.75
+    type: ASVideoTestDataset
+    dataroot_gt: datasets/Vid4/GT
+    dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4    # not needed
+    io_backend:
+      type: disk
 
-  #   cache_data: false
-  #   num_frame: 7
-  #   padding: reflection    # [reflection, reflection_circle]
-  #   # arbitrary scale dataset --------------------------
-  #   use_arbitrary_scale_downsampling: true
-  #   downsampling_scale: !!python/tuple [3.5, 1.75]
-  #   downsampling_mode: torch
-  #   # --------------------------------------------------
+    cache_data: false
+    num_frame: 7
+    padding: reflection    # [reflection, reflection_circle]
+    # arbitrary scale dataset --------------------------
+    use_arbitrary_scale_downsampling: true
+    downsampling_scale: !!python/tuple [3.5, 1.75]
+    downsampling_mode: torch
+    # --------------------------------------------------
   
-  # test_12:
-  #   name: Vid4_x4_x1.4
-  #   type: ASVideoTestDataset
-  #   dataroot_gt: datasets/Vid4/GT
-  #   dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4    # not needed
-  #   io_backend:
-  #     type: disk
+  test_42:
+    name: Vid4_x4_x1.4
+    type: ASVideoTestDataset
+    dataroot_gt: datasets/Vid4/GT
+    dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4    # not needed
+    io_backend:
+      type: disk
 
-  #   cache_data: false
-  #   num_frame: 7
-  #   padding: reflection    # [reflection, reflection_circle]
-  #   # arbitrary scale dataset --------------------------
-  #   use_arbitrary_scale_downsampling: true
-  #   downsampling_scale: !!python/tuple [4, 1.4]
-  #   downsampling_mode: torch
-  #   # --------------------------------------------------
+    cache_data: false
+    num_frame: 7
+    padding: reflection    # [reflection, reflection_circle]
+    # arbitrary scale dataset --------------------------
+    use_arbitrary_scale_downsampling: true
+    downsampling_scale: !!python/tuple [4, 1.4]
+    downsampling_mode: torch
+    # --------------------------------------------------
+
+  # ====== out-of-distribution scale ============================================
+#  test_43:
+#    name: Vid4_x6
+#    type: ASVideoTestDataset
+#    dataroot_gt: datasets/Vid4/GT
+#    dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4    # not needed
+#    io_backend:
+#      type: disk
+#
+#    cache_data: false
+#    num_frame: 7
+#    padding: reflection    # [reflection, reflection_circle]
+#    # arbitrary scale dataset --------------------------
+#    use_arbitrary_scale_downsampling: true
+#    downsampling_scale: !!python/tuple [6, 6]
+#    downsampling_mode: torch
+#    # --------------------------------------------------
+#
+#  test_44:
+#    name: Vid4_x7
+#    type: ASVideoTestDataset
+#    dataroot_gt: datasets/Vid4/GT
+#    dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4    # not needed
+#    io_backend:
+#      type: disk
+#
+#    cache_data: false
+#    num_frame: 7
+#    padding: reflection    # [reflection, reflection_circle]
+#    # arbitrary scale dataset --------------------------
+#    use_arbitrary_scale_downsampling: true
+#    downsampling_scale: !!python/tuple [7, 7]
+#    downsampling_mode: torch
+#    # --------------------------------------------------
+#
+#  test_45:
+#    name: Vid4_x7.5
+#    type: ASVideoTestDataset
+#    dataroot_gt: datasets/Vid4/GT
+#    dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4    # not needed
+#    io_backend:
+#      type: disk
+#
+#    cache_data: false
+#    num_frame: 7
+#    padding: reflection    # [reflection, reflection_circle]
+#    # arbitrary scale dataset --------------------------
+#    use_arbitrary_scale_downsampling: true
+#    downsampling_scale: !!python/tuple [7.5, 7.5]
+#    downsampling_mode: torch
+#    # --------------------------------------------------
+#
+#  test_46:
+#    name: Vid4_x8
+#    type: ASVideoTestDataset
+#    dataroot_gt: datasets/Vid4/GT
+#    dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4    # not needed
+#    io_backend:
+#      type: disk
+#
+#    cache_data: false
+#    num_frame: 7
+#    padding: reflection    # [reflection, reflection_circle]
+#    # arbitrary scale dataset --------------------------
+#    use_arbitrary_scale_downsampling: true
+#    downsampling_scale: !!python/tuple [8, 8]
+#    downsampling_mode: torch
+#    # --------------------------------------------------
+#
+#  test_47:
+#    name: Vid4_x9.5
+#    type: ASVideoTestDataset
+#    dataroot_gt: datasets/Vid4/GT
+#    dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4    # not needed
+#    io_backend:
+#      type: disk
+#
+#    cache_data: false
+#    num_frame: 7
+#    padding: reflection    # [reflection, reflection_circle]
+#    # arbitrary scale dataset --------------------------
+#    use_arbitrary_scale_downsampling: true
+#    downsampling_scale: !!python/tuple [9.5, 9.5]
+#    downsampling_mode: torch
+#    # --------------------------------------------------
+#
+#  test_48:
+#    name: Vid4_x12
+#    type: ASVideoTestDataset
+#    dataroot_gt: datasets/Vid4/GT
+#    dataroot_lq: datasets/Vid4/arbitrary_scale_BI/x4    # not needed
+#    io_backend:
+#      type: disk
+#
+#    cache_data: false
+#    num_frame: 7
+#    padding: reflection    # [reflection, reflection_circle]
+#    # arbitrary scale dataset --------------------------
+#    use_arbitrary_scale_downsampling: true
+#    downsampling_scale: !!python/tuple [12, 12]
+#    downsampling_mode: torch
+#    # --------------------------------------------------
 
 # network structures
 network_g:
@@ -740,7 +843,7 @@ network_g:
 
 # path
 path:
-  pretrain_network_g: ~
+  pretrain_network_g: experiments/pretrained_models/SAVSR/savsr_best.pth
   # param_key_g: params_ema
   strict_load_g: true
   resume_state: ~
