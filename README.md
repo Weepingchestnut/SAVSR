@@ -117,6 +117,12 @@ We retrained the model after cleaning the code, and the results on some scales m
 
 
 
+## Pretrained Model
+
+Official pretrained model can be download from [savsr_best.pth](https://github.com/Weepingchestnut/SAVSR/releases/download/v0.1.1/savsr_best.pth). To reproduce the results, you can download it and put it in the `experiments/pretrained_models/SAVSR` folder.
+
+
+
 ## Citations
 
 You may want to cite:
