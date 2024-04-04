@@ -415,44 +415,6 @@ class ResidualBlock(nn.Module):
         return [[torch.add(x[i], x2[i]) for i in range(self.nfr)], scale]
 
 
-# class ResidualBlock(nn.Module):
-
-#     def __init__(self, num_feat=64, num_frame=3, act=nn.LeakyReLU(0.2, True), use_osconv=False):
-#         super(ResidualBlock, self).__init__()
-#         self.nfe = num_feat
-#         self.nfr = num_frame
-#         self.act = act
-#         self.use_osconv = use_osconv
-
-#         self.conv0 = nn.Sequential(*[nn.Conv2d(num_feat, num_feat, kernel_size=3, stride=1, padding=1)
-#                                      for _ in range(num_frame)])
-#         # 1x1 conv to reduce dim
-#         self.conv1 = nn.Conv2d(num_feat * num_frame, num_feat, kernel_size=1, stride=1)
-#         if use_osconv:
-#             self.osconv = OSConv2d(num_feat, num_feat, kernel_size=3, stride=1, padding=1)
-#         self.conv2 = nn.Sequential(*[nn.Conv2d(num_feat * 2, num_feat, kernel_size=3, stride=1, padding=1)
-#                                      for _ in range(num_frame)])
-
-#     def forward(self, input: List):     # input [feat, scale]
-#         x, scale = input[0], input[1]
-
-#         x1 = [self.act(self.conv0[i](x[i])) for i in range(self.nfr)]
-
-#         merge = torch.cat(x1, dim=1)
-#         base = self.act(self.conv1(merge))
-
-#         if self.use_osconv:
-#             # 518: add residual ------------
-#             res = self.act(self.osconv(base, scale))
-#             base = res + base
-#             # ------------------------------
-
-#         x2 = [torch.cat([base, i], 1) for i in x1]
-#         x2 = [self.act(self.conv2[i](x2[i])) for i in range(self.nfr)]
-
-#         return [[torch.add(x[i], x2[i]) for i in range(self.nfr)], scale]
-
-
 class WindowUnit_l1(nn.Module):
     def __init__(self,
                  num_in_ch=3,
@@ -609,7 +571,6 @@ class ResidualGroup(nn.Module):
         return res + x
 
 
-# 540_3_0 asvsr add STAU
 @ARCH_REGISTRY.register()
 class SAVSR(nn.Module):
     def __init__(self,
@@ -793,9 +754,6 @@ get_HW = get_HW_round
 
 
 if __name__ == '__main__':
-    from torch.profiler import profile, record_function, ProfilerActivity
-    from fvcore.nn import flop_count_table, FlopCountAnalysis, ActivationCountAnalysis
-
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     num_frame = 7
@@ -823,27 +781,7 @@ if __name__ == '__main__':
     model.eval()    # needed, maybe bn bug
     
     input = torch.rand(1, num_frame, 3, 180, 320).to(device)
-    
-    # ------ torch profile -------------------------
-    with profile(
-        activities=[
-            ProfilerActivity.CPU,
-            ProfilerActivity.CUDA],
-        record_shapes=True,
-        profile_memory=True,
-    ) as prof:
-        with record_function("model_inference"):
-            out = model(input)
-    
-    print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
-    
-    # ------ Runtime ------------------------------
-    VSR_runtime_test(model, input, scale)
-
-    print(
-        "Model have {:.3f}M parameters in total".format(sum(x.numel() for x in model.parameters()) / 1000000.0))
 
     with torch.no_grad():
-        print(flop_count_table(FlopCountAnalysis(model, input), activations=ActivationCountAnalysis(model, input)))
         out = model(input)
     print(out.shape)

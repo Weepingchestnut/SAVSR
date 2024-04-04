@@ -127,7 +127,15 @@ Official pretrained model can be download from [savsr_best.pth](https://github.c
 
 You may want to cite:
 ```
-……
+@inproceedings{li2024savsr,
+  title={SAVSR: Arbitrary-Scale Video Super-Resolution via a Learned Scale-Adaptive Network},
+  author={Li, Zekun and Liu, Hongying and Shang, Fanhua and Liu, Yuanyuan and Wan, Liang and Feng, Wei},
+  booktitle={Proceedings of the AAAI Conference on Artificial Intelligence},
+  volume={38},
+  number={4},
+  pages={3288--3296},
+  year={2024}
+}
 ```
 
 
