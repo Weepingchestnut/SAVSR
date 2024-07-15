@@ -2,7 +2,7 @@
 
 This repository is the official PyTorch implementation of the following paper: 
 
-> **SAVSR: Arbitrary-Scale Video Super-Resolution via A Learned Scale-Adaptive Architecture**
+> [**SAVSR: Arbitrary-Scale Video Super-Resolution via A Learned Scale-Adaptive Architecture**](https://ojs.aaai.org/index.php/AAAI/article/view/28114)
 >
 > Zekun Li<sup>1</sup>, Hongying Liu<sup>2</sup>, Fanhua Shang<sup>2</sup>, Yuanyuan Liu<sup>1</sup>, Liang Wan<sup>2</sup>, Wei Feng<sup>2</sup>
 >
@@ -15,6 +15,14 @@ This repository is the official PyTorch implementation of the following paper:
 ## Brief Introduction of SAVSR
 
 > **Abstract**: Deep learning-based video super-resolution (VSR) networks have gained significant performance improvements in recent years. However, existing VSR networks can only support a fixed integer scale super-resolution task, and when we want to perform VSR at multiple scales, we need to train several models. This implementation certainly increases the consumption of computational and storage resources, which limits the application scenarios of VSR techniques. In this paper, we propose a novel **Scale-adaptive Arbitrary-scale Video Super-Resolution network (SAVSR)**, which is the first work focusing on spatial VSR at arbitrary scales including both non-integer and asymmetric scales. We also present an omni-dimensional scale-attention convolution, which dynamically adapts according to the scale of the input to extract inter-frame features with stronger representational power. Moreover, the proposed spatio-temporal adaptive arbitrary-scale upsampling performs VSR tasks using both temporal features and scale information. And we design an iterative bi-directional architecture for implicit feature alignment. Experiments at various scales on the benchmark datasets show that the proposed SAVSR outperforms state-of-the-art (SOTA) methods at non-integer and asymmetric scales.
+
+![](./imgs/fig_arch.png)
+
+![fig_osconv_satu](./imgs/fig_osconv_satu.png)
+
+
+
+![](./imgs/fig_display.png)
 
 
 
